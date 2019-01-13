@@ -11,11 +11,19 @@ Google Cloud
 Keras and the pre-reqs
 Tensorflow and the pre-reqs
 Numpy
+NBIA Data Retriever (For downloading files from official database)
 ```
 ## Getting Started
 
 Sign up for an GCP account
 Login in GCP with gcloud init to setup environment
+Uncomment the first line in gcloud.run.sh or local_gcloud_run.sh to save login credentials locally
+
+## Data Details:
+Three classes: Benign, Benign without callback, Malignant 
+
+Class Distrubution:
+Train: 577 benign, 104 benign without callback, 637 malignant
 
 ## Deployment
 

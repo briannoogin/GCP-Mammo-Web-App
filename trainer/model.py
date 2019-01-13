@@ -1,37 +1,52 @@
 import keras
 from keras.models import Sequential
-from keras.layers import Dense,Conv2D, Flatten, MaxPooling2D
+from keras.layers import Dense,Conv2D, Flatten, MaxPooling2D, Dropout, Activation
 from keras import regularizers
 from keras import optimizers
 from keras.preprocessing.image import ImageDataGenerator
 import tensorflow as tf
 
 from tensorflow.python.lib.io import file_io
-import json
-import _pickle as pickle
-from google.cloud import storage
 
 import argparse
 import pandas 
-
-import multiprocessing.pool
-from functools import partial
-from keras.preprocessing.image import Iterator
-import warnings
-import numpy as np
-import keras.backend as K
 import os
 import sys 
+import datetime
+
+import numpy as np
+
 def define_model(num_classes):
+    # set rng seed
+    np.random.seed(0)
     model = Sequential()
     # one input layer
+    # Convolution layers
     model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1),
                  activation='relu',
                  input_shape=(500,500,1)))
+
+    model.add(Conv2D(64, (5, 5)))
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
-    model.add(Conv2D(64, (5, 5), activation='relu'))
+    model.add(Conv2D(128, (5, 5), activation='relu'))
     model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(Dropout(0.25))
+
+    model.add(Conv2D(256, (5, 5)))
+    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+    model.add(Conv2D(512, (5, 5), activation='relu'))
+    model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(Dropout(0.25))
+
+    # Dense Layers
     model.add(Flatten())
+    model.add(Dense(100,activation = 'relu'))
+    model.add(Dropout(0.1))
+    model.add(Dense(100,activation = 'relu'))
+    model.add(Dropout(0.1))
+    model.add(Dense(100,activation = 'relu'))
+    model.add(Dropout(0.1))
+
     # one output layer
     model.add(Dense(units=num_classes, activation='softmax'))
     model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
@@ -54,24 +69,34 @@ def train_model(model,job_dir,**args):
         print ("Creation of the directory %s failed" % path)
     else:  
         print ("Successfully created the directory %s " % path)
-    os.system('gsutil -m cp -r gs://cbis-ddsm-cnn/data/flow %s' % path)
-    #train_generator = train_datagen.flow_from_dataframe(img_df,job_dir + '/data/train',x_col='img_file',y_col='class_label',has_ext=False)
+
+    # run google cloud command to copy images from GCS to local VM storage
+    os.system('gsutil -m cp -r gs://cbis-ddsm-cnn/data/train %s' % path)
+
+    # flow from VM directory
     train_generator = train_datagen.flow_from_directory(
-        'data/flow',
+        'data/train',
         target_size=(500,500),
         color_mode='grayscale',
         class_mode='sparse',
-        seed = 7)
+        seed = 7,
+        batch_size = 32)
 
+    # used to calculate number of steps per epoch
     num_examples = 1318
     steps = num_examples/train_generator.batch_size
     model.fit_generator(train_generator,steps_per_epoch=steps,epochs = 10)
+
     # save model locally
-    model.save('model.h5')
+    currentDT = str(datetime.datetime.now())
+    model_name = "model_%s.h5" % currentDT
+    model.save(model_name)
+    gc_model_name = "models/" + model_name
     # save the model file to GCloud
-    with file_io.FileIO('model.h5', mode='rb') as input_f:
-        with file_io.FileIO(job_dir + '/models/model.h5', mode='w+') as output_f:
+    with file_io.FileIO(model_name, mode='rb') as input_f:
+        with file_io.FileIO(job_dir + gc_model_name, mode='w+') as output_f:
             output_f.write(input_f.read())
+    #saved_model_path = tf.contrib.saved_model.save_keras_model(model, "./saved_models")
     return model
 
 if __name__ == "__main__":
@@ -86,5 +111,3 @@ if __name__ == "__main__":
     arguments = args.__dict__
     model = define_model(3)
     train_model(model,**arguments)
-    #load_data()
-    #load_json()

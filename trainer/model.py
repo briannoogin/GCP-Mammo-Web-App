@@ -86,16 +86,22 @@ def define_pretrained_InceptionNet_model(num_classes):
     #add additional layers 
     model = inception_net.output
     model = GlobalAveragePooling2D()(model)
-    model = Dense(100,activation='relu')(model)
+    model = Dense(100)(model)
     model = BatchNormalization()(model)
-    model = Dropout(.25,seed = 7)(model)
-    model = Dense(100,activation='relu')(model)
+    model = Activation(activation='relu')(model)
+    model = Dropout(.5,seed = 7)(model)
+
+    model = Dense(100)(model)
     model = BatchNormalization()(model)
-    model = Dropout(.25,seed = 7)(model)
-    model = Dense(100,activation='relu')(model)
+    model = Activation(activation='relu')(model)
+    model = Dropout(.5,seed = 7)(model)
+
+    model = Dense(100)(model)
     model = BatchNormalization()(model)
+    model = Activation(activation='relu')(model)
+    model = Dropout(.5, seed = 7)(model)
+
     preds = Dense(num_classes,activation='softmax')(model)
-    model = Dropout(.25,seed = 7)(model)
     model = Model(inputs = inception_net.input, outputs = preds)
     sgd = optimizers.SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True)
     model.compile(loss='sparse_categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])

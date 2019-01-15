@@ -5,6 +5,7 @@ from keras import regularizers
 from keras import optimizers
 from keras.preprocessing.image import ImageDataGenerator
 from keras.applications.nasnet import NASNetLarge
+from keras.models import load_model
 import tensorflow as tf
 from keras.callbacks import TensorBoard
 from tensorflow.python.lib.io import file_io
@@ -18,8 +19,6 @@ import datetime
 import numpy as np
 
 def define_model(num_classes):
-    # set rng seed
-    np.random.seed(0)
     model = Sequential()
     # one input layer
     # Convolution layers
@@ -75,12 +74,14 @@ def define_pretrained_NASNet_model(num_classes):
     #model.summary()
     return model
 
+# train from scratch 
 def define_NASNet_model(num_classes):
     model = NASNetLarge(input_shape = (250,250,1),weights = None,classes=num_classes, include_top = True)
     # one output layer
     model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     return model
 
+# trains model in batches 
 def train_model(model,job_dir,**args):
     # image data generator for data augmentation
     train_datagen = ImageDataGenerator(
@@ -97,10 +98,10 @@ def train_model(model,job_dir,**args):
     else:  
         print ("Successfully created the directory %s " % path)
 
-    print("Loading files from GCS")
+    print("Loading train files from GCS")
     # run google cloud command to copy images from GCS to local VM storage
     os.system('gsutil -m -q cp -r gs://cbis-ddsm-cnn/data/train %s' % path)
-    print("Loading files from GCS complete")
+    print("Loading train files from GCS complete")
     # flow from VM directory
     train_generator = train_datagen.flow_from_directory(
         'data/train',
@@ -115,9 +116,9 @@ def train_model(model,job_dir,**args):
     steps = num_examples/train_generator.batch_size
 
     # add tensorboard
-    log_path = job_dir + '/logs'
+    log_path = job_dir + 'logs/'
     tensorboard = TensorBoard(log_dir = log_path,histogram_freq=0, write_graph=True, write_images=True)
-    model.fit_generator(train_generator,steps_per_epoch=steps,epochs = 100,callbacks=[tensorboard])
+    model.fit_generator(train_generator,steps_per_epoch=steps,epochs = 1,callbacks=[tensorboard])
 
     # save model locally
     currentDT = str(datetime.datetime.now())
@@ -131,13 +132,35 @@ def train_model(model,job_dir,**args):
     #saved_model_path = tf.contrib.saved_model.save_keras_model(model, "./saved_models")
     return model
 
+# evaluates model from test performance 
 def evaluate_model(model):
-    print("Loading files from GCS")
+    print("Loading test files from GCS")
     # run google cloud command to copy images from GCS to local VM storage
     path = 'data'
     os.system('gsutil -m -q cp -r gs://cbis-ddsm-cnn/data/test %s' % path)
-    print("Loading files from GCS complete")
+    print("Loading test files from GCS complete")
+       # image data generator for data augmentation
+    test_datagen = ImageDataGenerator(
+        rescale = 1./255, 
+        )
+    # flow from VM directory
+    test_generator = test_datagen.flow_from_directory(
+        'data/test',
+        target_size=(250,250),
+        color_mode='rgb',
+        class_mode='sparse',
+        seed = 7,
+        batch_size = 2,
+        shuffle = False)
+    num_examples = 378
+    steps = num_examples/test_generator.batch_size
+    result = model.evaluate_generator(test_generator,steps=steps)
+    print("Test Error",result[0])
+    print("Test Accuracy:", result[1])
+    
 if __name__ == "__main__":
+    # set rng seed
+    np.random.seed(0)
     parser = argparse.ArgumentParser()
     # Input Arguments
     parser.add_argument(
@@ -147,8 +170,21 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     arguments = args.__dict__
-    #model = define_model(3)
-    #os.system("nvidia-smi -q -g 0 -d UTILIZATION -l") 
-    #model = define_NASNet_model(3)
+    # define model
+
     model = define_pretrained_NASNet_model(3)
-    train_model(model,**arguments)
+    train = True
+
+    # train phase
+    if train == True:
+        model = train_model(model,**arguments)
+    # load model
+    else:
+        model_name = 'pretrained_nasnet.h5'
+        print("Loading model from Google Cloud")	
+        os.system('gsutil -q cp gs://cbis-ddsm-cnn/models/%s data/%s' % (model_name, model_name))
+        print("Finished loading model from Google Cloud")	
+        model = load_model('data/' + model_name)
+
+    # evaluate model on test data
+    evaluate_model(model)

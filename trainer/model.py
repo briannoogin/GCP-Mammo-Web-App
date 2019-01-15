@@ -5,9 +5,10 @@ from keras import regularizers
 from keras import optimizers
 from keras.preprocessing.image import ImageDataGenerator
 from keras.applications.nasnet import NASNetLarge
+from keras.applications.inception_v3  import InceptionV3
 from keras.models import load_model
 import tensorflow as tf
-from keras.callbacks import TensorBoard
+from keras.callbacks import TensorBoard, ModelCheckpoint
 from tensorflow.python.lib.io import file_io
 
 import argparse
@@ -56,6 +57,7 @@ def define_model(num_classes):
 # define a NASNetLarge model from Google Brain
 def define_pretrained_NASNet_model(num_classes):
     nas_net = NASNetLarge(input_shape = (250,250,3),weights = 'imagenet',classes=num_classes, include_top = False)
+    print(len(nas_net.layers))
     # freeze the pre-trained layers
     for layer in nas_net.layers:
         layer.trainable=False
@@ -71,24 +73,45 @@ def define_pretrained_NASNet_model(num_classes):
     preds = Dense(num_classes,activation='softmax')(model)
     model = Model(inputs = nas_net.input, outputs = preds)
     sgd = optimizers.SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
-    model.compile(loss='sparse_categorical_crossentropy', optimizer='sgd', metrics=['accuracy'])
+    model.compile(loss='sparse_categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
     #model.summary()
     return model
 
-# train from scratch 
-def define_NASNet_model(num_classes):
-    model = NASNetLarge(input_shape = (250,250,1),weights = None,classes=num_classes, include_top = True)
-    # one output layer
-    model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+def define_pretrained_InceptionNet_model(num_classes):
+    inception_net = InceptionV3(input_shape = (250,250,3),weights = 'imagenet',classes=num_classes, include_top = False)
+    layers = inception_net.layers
+    # freeze the first 261 pre-trained layers
+    for layer in layers[0:262]:
+        layer.trainable=False
+    #add additional layers 
+    model = inception_net.output
+    model = GlobalAveragePooling2D()(model)
+    model = Dense(100,activation='relu')(model)
+    model = BatchNormalization()(model)
+    model = Dropout(.25,seed = 7)(model)
+    model = Dense(100,activation='relu')(model)
+    model = BatchNormalization()(model)
+    model = Dropout(.25,seed = 7)(model)
+    model = Dense(100,activation='relu')(model)
+    model = BatchNormalization()(model)
+    preds = Dense(num_classes,activation='softmax')(model)
+    model = Dropout(.25,seed = 7)(model)
+    model = Model(inputs = inception_net.input, outputs = preds)
+    sgd = optimizers.SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True)
+    model.compile(loss='sparse_categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
+    #model.summary()
     return model
 
 # trains model in batches 
-def train_model(model,job_dir,mode,**args):
+def train_model(model,job_dir,mode,model_name,**args):
     # image data generator for data augmentation for training data
+    # may add more data augmentation to reduce overfitting
     train_datagen = ImageDataGenerator(
         rescale = 1./255, 
         rotation_range=30,
-        horizontal_flip=True)
+        horizontal_flip=True,
+        width_shift_range=.2,
+        height_shift_range=.2,)
 
     # image data generator for validation data
     validation_datagen = ImageDataGenerator(
@@ -137,12 +160,10 @@ def train_model(model,job_dir,mode,**args):
         raise ValueError("Incorrect mode argument")
 
     tensorboard = TensorBoard(log_dir = log_path,histogram_freq=0, write_images=True)
-    model.fit_generator(train_generator,steps_per_epoch=train_steps,epochs = 100,callbacks=[tensorboard],validation_data = validation_generator,validation_steps=val_steps)
-
-    # save model locally
-    currentDT = str(datetime.datetime.now())
-    model_name = "model_%s.h5" % currentDT
-    model.save(model_name)
+    checkpoint = ModelCheckpoint(model_name, monitor='val_acc', verbose=1, save_best_only=True, mode='max')
+    model.fit_generator(train_generator,steps_per_epoch=train_steps,epochs = 100,callbacks=[tensorboard,checkpoint],validation_data = validation_generator,validation_steps=val_steps)
+    
+    #model.save(model_name)
     gc_model_name = "models/" + model_name
     # save the model file to GCloud
     with file_io.FileIO(model_name, mode='rb') as input_f:
@@ -201,11 +222,15 @@ if __name__ == "__main__":
         help = 'Used to train model or load trained model from memory',
         required = True
     )
+    parser.add_argument(
+        '--model_name',
+        help = 'Name is used to save model to file',
+        required = True
+    )
     args = parser.parse_args()
     arguments = args.__dict__
     
     if(arguments['mode'] == 'CLOUD'):
-        print('hi')
         # make a folder in the VM so that files can be copied from GCS
         path = "data"
         try:  
@@ -219,7 +244,8 @@ if __name__ == "__main__":
     # train phase
     if train == 'TRUE':
         # define model
-        model = define_pretrained_NASNet_model(3)
+        #model = define_pretrained_NASNet_model(3)
+        model = define_pretrained_InceptionNet_model(3)
         model = train_model(model,**arguments)
     # load model
     else:

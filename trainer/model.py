@@ -83,23 +83,24 @@ def define_pretrained_InceptionNet_model(num_classes):
     # freeze the first 261 pre-trained layers
     for layer in layers[0:262]:
         layer.trainable=False
+    dropout = .75
     #add additional layers 
     model = inception_net.output
     model = GlobalAveragePooling2D()(model)
     model = Dense(100)(model)
     model = BatchNormalization()(model)
     model = Activation(activation='relu')(model)
-    model = Dropout(.5,seed = 7)(model)
+    model = Dropout(dropout,seed = 7)(model)
 
     model = Dense(100)(model)
     model = BatchNormalization()(model)
     model = Activation(activation='relu')(model)
-    model = Dropout(.5,seed = 7)(model)
+    model = Dropout(dropout,seed = 7)(model)
 
     model = Dense(100)(model)
     model = BatchNormalization()(model)
     model = Activation(activation='relu')(model)
-    model = Dropout(.5, seed = 7)(model)
+    model = Dropout(dropout, seed = 7)(model)
 
     preds = Dense(num_classes,activation='softmax')(model)
     model = Model(inputs = inception_net.input, outputs = preds)

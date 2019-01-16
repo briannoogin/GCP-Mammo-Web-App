@@ -7,6 +7,8 @@ import pandas
 import os
 from os import path
 import glob 
+import pickle
+import json
 # module is used to import dicom images and write them to jpgs for training and testing 
 
 # function reads in dicom image and returns the pixel array of the image
@@ -25,28 +27,28 @@ def read_csv_descriptions(csv_path):
 
 # converts all dicom images to jpegs
 def convert_dcm2jpg():
+    save_image = True
     # get list of all dicom images
     path_list = get_dicom_folder()
     # list of classes for all patient cases
     pathology_list = []
-    df = pandas.read_csv('mass_case_description_train_set.csv')
+    img_list = []
+    df = pandas.read_csv('mass_case_description_test_set.csv')
+
     # transform string classes into integer numbers
     # 0: benign
     # 1: benign without callback
     # 2: malignant
     labels,key = pandas.factorize(df['pathology'],sort=True)
-    base_file_name = "train/cropped_img"
     for idx,file_path in enumerate(path_list):
         img = display_image(file_path,False)
-        file_name = base_file_name + '_' + df['patient_id'][idx] + '_' + df['left or right breast'][idx] + '_' + df['image view'][idx] + '_' + df['pathology'][idx]
-        io.imsave(file_name + ".jpg",img)
-        pathology_list.append(labels[idx])
-
-    # save class list as text file
-    with open('classes.txt', 'w') as f:
-        for example in pathology_list:
-            f.write("%s\n" % example)
-            
+        file_name = 'data/test/' + df['pathology'][idx] + '/' + df['patient_id'][idx] + '_' + df['left or right breast'][idx] + '_' + df['image view'][idx] + '_' + str(df['breast_density'][idx]) + '_' + str(df['abnormality id'][idx])
+        if save_image:
+            img = io.imsave(file_name + ".jpg",img)
+        pathology_list.append(int(labels[idx]))
+        img_list.append(file_name)
+    assert(len(pathology_list) == len(img_list))
+        
 # gets path of the dicom image folder
 def get_dicom_folder():
     # get working directory
@@ -54,7 +56,7 @@ def get_dicom_folder():
     # remove the current directory from the path 
     base = os.path.join(cwd,'CBIS-DDSM')
     # image path is within the nested folders
-    path = os.path.join(base,'train','*','*','*','*')
+    path = os.path.join(base,'test','*','*','*','*')
     path_list = []
     # get matching pattern with glob
     for name in glob.glob(path,recursive=True):
@@ -69,4 +71,5 @@ def delete_roi_mask():
             os.remove(file)
 
 if __name__ == "__main__":
+    #delete_roi_mask()
    convert_dcm2jpg()

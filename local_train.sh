@@ -6,6 +6,7 @@ PACKAGE_STAGING_PATH="gs://cbis-ddsm-cnn"
 
 now=$(date +"%Y%m%d_%H%M%S")
 JOB_NAME="Brian_Nguyen_$now"
+MODEL_NAME=$JOB_NAME.h5
 JOB_DIR="gs://cbis-ddsm-cnn"
 REGION="us-central1"
 MODE="LOCAL"
@@ -16,4 +17,5 @@ gcloud ml-engine local train \
 --job-dir=$JOB_DIR \
 -- \
 --mode=$MODE \
---train TRUE
+--train TRUE \
+--model_name=$MODEL_NAME

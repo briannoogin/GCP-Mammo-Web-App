@@ -3,112 +3,61 @@ from keras.models import Sequential, Model
 from keras.layers import Dense,Conv2D, Flatten, MaxPooling2D, Dropout, Activation, BatchNormalization, GlobalAveragePooling2D
 from keras import regularizers
 from keras import optimizers
+import keras.backend as K
 from keras.preprocessing.image import ImageDataGenerator
 from keras.applications.nasnet import NASNetLarge
+from keras.applications.xception import Xception
 from keras.applications.inception_v3  import InceptionV3
 from keras.models import load_model
-import tensorflow as tf
 from keras.callbacks import TensorBoard, ModelCheckpoint
-from tensorflow.python.lib.io import file_io
+from keras.models import model_from_config
 
+import tensorflow as tf
+from tensorflow.python.lib.io import file_io
+from tensorflow.python.saved_model import builder as saved_model_builder
+#from tensorflow_serving.session_bundle import exporter
+
+import numpy as np
 import argparse
 import pandas 
 import os
 import sys 
 import datetime
 
-import numpy as np
 
-def define_model(num_classes):
-    model = Sequential()
-    # one input layer
-    # Convolution layers
-    model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1),
-                 activation='relu',
-                 input_shape=(250,250,3)))
-
-    model.add(Conv2D(64, (5, 5)))
-    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
-    model.add(Conv2D(128, (5, 5), activation='relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Dropout(0.25))
-
-    model.add(Conv2D(256, (5, 5)))
-    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
-    model.add(Conv2D(512, (5, 5), activation='relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Dropout(0.25))
-
-    # Dense Layers
-    model.add(Flatten())
-    model.add(Dense(100,activation = 'relu'))
-    model.add(Dropout(0.1))
-    model.add(Dense(100,activation = 'relu'))
-    model.add(Dropout(0.1))
-    model.add(Dense(100,activation = 'relu'))
-    model.add(Dropout(0.1))
-
-    # one output layer
-    model.add(Dense(units=num_classes, activation='softmax'))
-    model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-    model.summary()
-    return model
-
-# define a NASNetLarge model from Google Brain
-def define_pretrained_NASNet_model(num_classes):
-    nas_net = NASNetLarge(input_shape = (250,250,3),weights = 'imagenet',classes=num_classes, include_top = False)
-    print(len(nas_net.layers))
-    # freeze the pre-trained layers
-    for layer in nas_net.layers:
-        layer.trainable=False
-    # add additional layers 
-    model = nas_net.output
-    model = GlobalAveragePooling2D()(model)
-    model = Dense(100,activation='relu')(model)
-    model = BatchNormalization()(model)
-    model = Dense(100,activation='relu')(model)
-    model = BatchNormalization()(model)
-    model = Dense(100,activation='relu')(model)
-    model = BatchNormalization()(model)
-    preds = Dense(num_classes,activation='softmax')(model)
-    model = Model(inputs = nas_net.input, outputs = preds)
-    sgd = optimizers.SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
-    model.compile(loss='sparse_categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
-    #model.summary()
-    return model
-
+# defines an InceptionNet model
 def define_pretrained_InceptionNet_model(num_classes):
     inception_net = InceptionV3(input_shape = (250,250,3),weights = 'imagenet',classes=num_classes, include_top = False)
     layers = inception_net.layers
-    # freeze the first 261 pre-trained layers
-    for layer in layers[0:262]:
+    # freeze the first 150 pre-trained layers
+    for layer in layers[0:150]:
         layer.trainable=False
-    dropout = .75
+    dropout = .50
     #add additional layers 
     model = inception_net.output
     model = GlobalAveragePooling2D()(model)
-    model = Dense(100)(model)
+    model = Dense(100,kernel_regularizer=regularizers.l2(0.1))(model)
     model = BatchNormalization()(model)
     model = Activation(activation='relu')(model)
     model = Dropout(dropout,seed = 7)(model)
 
-    model = Dense(100)(model)
+    model = Dense(100,kernel_regularizer=regularizers.l2(0.1))(model)
     model = BatchNormalization()(model)
     model = Activation(activation='relu')(model)
     model = Dropout(dropout,seed = 7)(model)
 
-    model = Dense(100)(model)
+    model = Dense(100,kernel_regularizer=regularizers.l2(0.1))(model)
     model = BatchNormalization()(model)
     model = Activation(activation='relu')(model)
     model = Dropout(dropout, seed = 7)(model)
 
     preds = Dense(num_classes,activation='softmax')(model)
     model = Model(inputs = inception_net.input, outputs = preds)
-    sgd = optimizers.SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True)
+    sgd = optimizers.SGD(lr=0.0025, decay=1e-6, momentum=0.9, nesterov=True)
     model.compile(loss='sparse_categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
     #model.summary()
     return model
-
+   
 # trains model in batches 
 def train_model(model,job_dir,mode,model_name,**args):
     # image data generator for data augmentation for training data
@@ -118,7 +67,9 @@ def train_model(model,job_dir,mode,model_name,**args):
         rotation_range=30,
         horizontal_flip=True,
         width_shift_range=.2,
-        height_shift_range=.2,)
+        height_shift_range=.2,
+        shear_range=0.2,
+        zoom_range=0.2,)
 
     # image data generator for validation data
     validation_datagen = ImageDataGenerator(
@@ -176,7 +127,6 @@ def train_model(model,job_dir,mode,model_name,**args):
     with file_io.FileIO(model_name, mode='rb') as input_f:
         with file_io.FileIO(job_dir + gc_model_name, mode='w+') as output_f:
             output_f.write(input_f.read())
-    #saved_model_path = tf.contrib.saved_model.save_keras_model(model, "./saved_models")
     return model
 
 # evaluates model from test performance 
@@ -207,6 +157,22 @@ def evaluate_model(model,mode, **args):
     result = model.evaluate_generator(test_generator,steps=steps)
     print("Test Error",result[0])
     print("Test Accuracy:", result[1])
+
+# exports a keras model into a tensorflow model so it can be hosted on Google ML REST API
+def export_model(model,job_dir):
+    # define model input and output
+    signature = tf.saved_model.signature_def_utils.predict_signature_def(
+        inputs={"input": model.input},
+        outputs={"output": model.output})
+    builder = tf.saved_model.builder.SavedModelBuilder(job_dir + "/models/exported_model")
+    with K.get_session() as sess:
+        builder.add_meta_graph_and_variables(
+            sess=sess,
+            tags=[tf.saved_model.tag_constants.SERVING],
+            signature_def_map={
+            "predict": signature, "serving_default": signature})
+    # save tensorflow model
+    builder.save()
 
 if __name__ == "__main__":
     # set rng seed
@@ -251,15 +217,19 @@ if __name__ == "__main__":
     # train phase
     if train == 'TRUE':
         # define model
-        #model = define_pretrained_NASNet_model(3)
         model = define_pretrained_InceptionNet_model(3)
+        #model = define_pretrained_XceptionNet(3)
         model = train_model(model,**arguments)
+
     # load model
     else:
-        model_name = 'pretrained_nasnet.h5'
+        model_name = arguments['model_name']
         print("Loading model from Google Cloud")	
         os.system('gsutil -q cp gs://cbis-ddsm-cnn/models/%s data/%s' % (model_name, model_name))
         print("Finished loading model from Google Cloud")	
         model = load_model('data/' + model_name)
         # evaluate model on test data
         evaluate_model(model,**arguments)
+        export = False
+        if export == True:
+            export_model(model,arguments['job_dir'])

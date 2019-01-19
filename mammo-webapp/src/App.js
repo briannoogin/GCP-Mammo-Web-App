@@ -3,10 +3,14 @@ import React from "react";
 import Titles from "./components/Titles";
 import Form from "./components/Form";
 import Weather from "./components/Weather";
+import ImageFileDrop from "./components/ImageFileDrop"
+import BoxCard from "./components/BoxCard"
 
 const API_KEY = "3585775f387b0d0cba6c5b3dc41b8167";
 
-class App extends React.Component {
+//const {auth} = require('google-auth-library');
+class App extends React.Component 
+{
   state = {
     temperature: 10,
     city: 'Plano',
@@ -41,7 +45,8 @@ class App extends React.Component {
       });
     }
   }
-  render() {
+  render() 
+  {
     return (
       <div>
         <div className="wrapper">
@@ -52,15 +57,16 @@ class App extends React.Component {
                   <Titles/>
                 </div>
                 <div className="col-sm-7 col-xs-7 form-container">
-                  <Form getWeather={this.getWeather} />
+                  {/* <Form getWeather={this.getWeather} />
                   <Weather 
                     temperature={this.state.temperature} 
                     humidity={this.state.humidity}
                     city={this.state.city}
                     country={this.state.country}
                     description={this.state.description}
-                    error={this.state.error}
-                  />
+                    error={this.state.error} 
+                  /> */}
+                  <BoxCard></BoxCard>
                 </div>
               </div>
             </div>
@@ -68,6 +74,23 @@ class App extends React.Component {
         </div>
       </div>
     );
+  }
+
+  async predict(img)
+  {
+    const link = 'https://ml.googleapis.com/v1/projects/MammoWebApp_Model:predict?key={YOUR_API_KEY}';
+    const parameters = {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        predictions:img,
+      })
+    };
+    const api_call = await fetch(link,parameters);
+    const data = await api_call.json();
   }
 };
 

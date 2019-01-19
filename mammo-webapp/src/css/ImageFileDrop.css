@@ -1,8 +1,12 @@
 .file-drop {
     /* relatively position the container bc the contents are absolute */
     position: relative;
-    height: 500px;
+    height: 50vh;
     width: 100%;
+    background-color: #EBEBEB;
+    padding-top: 100px;
+    text-align: center;
+    /* background: url("../img/bg.jpg") center center no-repeat; */
   }
   
   .file-drop > .file-drop-target {

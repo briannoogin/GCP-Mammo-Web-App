@@ -3,41 +3,40 @@ import FileDrop from'react-file-drop'
 import '../css/ImageFileDrop.css'
 class ImageFileDrop extends Component 
 {
-    handleDrop = (files, event) => 
+    handleDrop = (files:FileList, event:any) => 
     {
         // get file from list of files
-        const file = files['0'];
+        const file = files[0];
         let array_reader = new FileReader();
         let data_reader = new FileReader();
-        let img = undefined; 
+        let img = new Image();
         let img_array = undefined;
         // function reads image data to get dimensions 
         data_reader.onload = function()
         {
-          img = new Image();
           //console.log(file)
-          img.src = data_reader.result;
+          img.src = data_reader.result as string;
           // read the file as an array buffer
           array_reader.readAsArrayBuffer(file);
         }
         // function that reads the array data
         array_reader.onload = function()
         {
-          // function converts array into 2d array based on the img_width
-          function convertArray(array, img_width)
+          // function converts Uint8array into 2d array based on the img_width
+          function convertArray(array:Array<number>, img_width:number)
           {
             var img_array = [];
             // convert 1d array to 2d array with shape given by img_width
             while(array.length) 
             {
-              img_array.push(array.splice(0,img_width));
+              img_array.push(array.slice(0,img_width));
             }
             // console.log(JSON.stringify(img_array));
             // console.log([img_array.length, img_array[0].length ]);
             return img_array;
             }
           // convert Uint8Array to normal Array so splice can be used 
-          const array = Array.from(new Uint8Array(array_reader.result)); 
+          const array:Array<number> = Array.from(new Uint8Array(array_reader.result as ArrayBuffer)); 
           // console.log(array_reader.result);
           // console.log(array.length);
           img_array = convertArray(array,img.width);
@@ -48,7 +47,7 @@ class ImageFileDrop extends Component
       data_reader.readAsDataURL(file);
     }
    
-    async predict(img)
+    async predict(img:Array<number>)
     {
       const link = 'https://ml.googleapis.com/v1/projects/MammoWebApp_Model:predict?key={YOUR_API_KEY}';
       const parameters = {

@@ -3,7 +3,7 @@ import { Card, CardHeader, CardText, CardBody,
   CardTitle, CardSubtitle, Button } from 'reactstrap';
 import ImageFileDrop from "./ImageFileDrop"
 
-const BoxCard = (props) => {
+const BoxCard = () => {
   return (
     <div>
       <Card>

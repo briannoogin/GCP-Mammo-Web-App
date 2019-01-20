@@ -1,0 +1,8 @@
+FROM python:3
+ RUN mkdir /backend
+ WORKDIR /backend
+ ADD Pipfile /backend/
+ ADD Pipfile.lock /backend/
+ RUN pipenv install
+ ADD . /backend/
+ EXPOSE 8000

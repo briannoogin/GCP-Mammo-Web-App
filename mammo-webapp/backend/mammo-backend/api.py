@@ -3,7 +3,7 @@ from googleapiclient import discovery
 from googleapiclient import errors
 import numpy as np
 from skimage.io import imread
-import sys
+from skimage.transform import resize
 def predict_json(project, model, instances, version=None):
     """Send json data to a deployed model for prediction.
 
@@ -37,7 +37,7 @@ def predict_json(project, model, instances, version=None):
 
     return response['predictions']
 
-# convert flattened list to a 2d list with given shape
+# convert flattened list to a 2d array with given shape
 def convert_2Darray(list,img_width,img_height):
     array = np.asarray(list)
     array = np.reshape(array,(img_width,img_height,4))
@@ -46,11 +46,16 @@ def convert_2Darray(list,img_width,img_height):
         for col in range(len(array[row])):
             # weighed average of rgb colors to convert grayscale 
             converted_array[row][col] = .3 * array[row][col][0] + .59 * array[row][col][1] + .11 * array[row][col][2]
-    return converted_array.tolist()
+    return converted_array
 
 # send request to model hosted on Google ML engine
 def send_request(img,img_width,img_height):
     img = convert_2Darray(img,img_width,img_height)
+    # resize image to shape (250,250)
+    img = resize(img, (250,250))
+    # noramlize img 
+    img /= 255
+    img = img.tolist()
     dict = predict_json('cbis-ddsm-cnn','MammoWebApp_Model',[[img]])
     classes = dict[0]['output']
     # find the class with the highest probability 

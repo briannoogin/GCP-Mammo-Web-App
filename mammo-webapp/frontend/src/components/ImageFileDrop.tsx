@@ -34,14 +34,14 @@ class ImageFileDrop extends Component
           const OPTIONS: RequestInit = {
             body:JSON.stringify(json),
             method:'POST',
-            mode:'no-cors',
+            mode:'cors',
             headers:{
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*'
             }
           };
           fetch(URL,OPTIONS)  
-          .then(data=>{console.log(data)})
-          .then(res =>{console.log(res)})
+          .then(res =>{res.json().then(prediction => console.log(prediction))})
           .catch(error =>{console.log(error)})
         };
     }

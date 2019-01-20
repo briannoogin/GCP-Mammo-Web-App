@@ -1,11 +1,8 @@
 from flask import Flask, jsonify, request, make_response, render_template
+from flask_cors import CORS
 import api
-app = Flask(__name__)
-
-incomes = [
-  { 'description': 'salary', 'amount': 5000 }
-]
-
+app = Flask(__name__,static_folder="../../frontend/build",template_folder='../../frontend/build')
+CORS(app)
 # Create a URL route in our application for "/"
 @app.route('/')
 def home():
@@ -15,7 +12,7 @@ def home():
 
     :return:        the rendered template 'home.html'
     """
-    return render_template('index.html')
+    return render_template('../../frontend/build/index.html')
 
 # GET
 # @app.route('/api')

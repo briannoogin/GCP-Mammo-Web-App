@@ -11,6 +11,8 @@
     "acorn": "^6.0.5",
     "bootstrap": "^4.2.1",
     "google-auth-library": "^3.0.1",
+    "googleapis": "^36.0.0",
+    "jpeg-js": "^0.3.4",
     "react": "^16.7.0",
     "react-dom": "^16.7.0",
     "react-file-drop": "^0.2.7",

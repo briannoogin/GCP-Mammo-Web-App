@@ -23,7 +23,8 @@ Uncomment the first line in gcloud.run.sh or local_gcloud_run.sh to save login c
 Three classes: Benign, Benign without callback, Malignant 
 
 Class Distrubution:
-Train: 577 benign, 104 benign without callback, 637 malignant
+Train: Benign:1105, Benign without callback:578, Malignant:1181, Total: 2864 
+Test: Benign:324, Benign without callback:104, Malignant:276, Total: 704
 
 ## Deployment
 

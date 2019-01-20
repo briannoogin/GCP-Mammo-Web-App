@@ -1,6 +1,6 @@
 import keras
 from keras.models import Sequential, Model
-from keras.layers import Dense,Conv2D, Flatten, MaxPooling2D, Dropout, Activation, BatchNormalization, GlobalAveragePooling2D
+from keras.layers import Dense,Conv2D, Flatten, MaxPooling2D, Dropout, Activation, BatchNormalization, GlobalAveragePooling2D, Input,Concatenate
 from keras import regularizers
 from keras import optimizers
 import keras.backend as K
@@ -27,7 +27,9 @@ import datetime
 
 # defines an InceptionNet model
 def define_pretrained_InceptionNet_model(num_classes):
-    inception_net = InceptionV3(input_shape = (250,250,3),weights = 'imagenet',classes=num_classes, include_top = False)
+    input = Input(shape = (1,250,250))
+    concat_input = Concatenate(axis = 1)([input,input,input])
+    inception_net = InceptionV3(input_tensor = concat_input,weights = 'imagenet',classes=num_classes, include_top = False)
     layers = inception_net.layers
     # freeze the first 150 pre-trained layers
     for layer in layers[0:150]:
@@ -52,12 +54,12 @@ def define_pretrained_InceptionNet_model(num_classes):
     model = Dropout(dropout, seed = 7)(model)
 
     preds = Dense(num_classes,activation='softmax')(model)
-    model = Model(inputs = inception_net.input, outputs = preds)
+    model = Model(inputs = input, outputs = preds)
     sgd = optimizers.SGD(lr=0.0025, decay=1e-6, momentum=0.9, nesterov=True)
     model.compile(loss='sparse_categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
     #model.summary()
     return model
-   
+
 # trains model in batches 
 def train_model(model,job_dir,mode,model_name,**args):
     # image data generator for data augmentation for training data
@@ -81,31 +83,31 @@ def train_model(model,job_dir,mode,model_name,**args):
         print("Loading train and validation files from GCS")
         # run google cloud command to copy images from GCS to local VM storage
         path = 'data'
-        os.system('gsutil -m -q cp -r gs://cbis-ddsm-cnn/data/train %s' % path)
-        os.system('gsutil -m -q cp -r gs://cbis-ddsm-cnn/data/test %s' % path)
+        os.system('gsutil -m -q cp -r gs://cbis-ddsm-cnn/data/combined_train %s' % path)
+        os.system('gsutil -m -q cp -r gs://cbis-ddsm-cnn/data/combined_test %s' % path)
         print("Loading train and validation files from GCS complete")
 
     # flow from directory
     train_generator = train_datagen.flow_from_directory(
-        'data/train',
+        'data/combined_train',
         target_size=(250,250),
-        color_mode='rgb',
+        color_mode='grayscale',
         class_mode='sparse',
         seed = 7,
         batch_size = 16)
 
     validation_generator = validation_datagen.flow_from_directory(
-        'data/test',
+        'data/combined_test',
         target_size=(250,250),
-        color_mode='rgb',
+        color_mode='grayscale',
         class_mode='sparse',
         seed = 7,
         batch_size = 16,
         shuffle = True)
 
     # used to calculate number of steps per epoch
-    num_train_examples = 1318
-    num_val_examples = 378
+    num_train_examples = 2864
+    num_val_examples = 704
     train_steps = num_train_examples / train_generator.batch_size
     val_steps = num_val_examples / validation_generator.batch_size
 
@@ -136,7 +138,7 @@ def evaluate_model(model,mode, **args):
         print("Loading test files from GCS")
         # run google cloud command to copy images from GCS to local VM storage
         path = 'data'
-        os.system('gsutil -m -q cp -r gs://cbis-ddsm-cnn/data/test %s' % path)
+        os.system('gsutil -m -q cp -r gs://cbis-ddsm-cnn/data/combined_test %s' % path)
         print("Loading test files from GCS complete")
 
     # image data generator for data augmentation
@@ -159,12 +161,12 @@ def evaluate_model(model,mode, **args):
     print("Test Accuracy:", result[1])
 
 # exports a keras model into a tensorflow model so it can be hosted on Google ML REST API
-def export_model(model,job_dir):
+def export_model(model,job_dir,model_name):
     # define model input and output
     signature = tf.saved_model.signature_def_utils.predict_signature_def(
         inputs={"input": model.input},
         outputs={"output": model.output})
-    builder = tf.saved_model.builder.SavedModelBuilder(job_dir + "/models/exported_model")
+    builder = tf.saved_model.builder.SavedModelBuilder(job_dir + "/models/" + model_name)
     with K.get_session() as sess:
         builder.add_meta_graph_and_variables(
             sess=sess,
@@ -175,6 +177,10 @@ def export_model(model,job_dir):
     builder.save()
 
 if __name__ == "__main__":
+
+    # used to make formatting image in Google Cloud easier 
+    K.set_image_data_format('channels_first')
+
     # set rng seed
     np.random.seed(0)
     parser = argparse.ArgumentParser()
@@ -214,11 +220,11 @@ if __name__ == "__main__":
             print ("Successfully created the directory %s " % path)
 
     train = arguments['train']
+    export = True
     # train phase
     if train == 'TRUE':
         # define model
         model = define_pretrained_InceptionNet_model(3)
-        #model = define_pretrained_XceptionNet(3)
         model = train_model(model,**arguments)
 
     # load model
@@ -230,6 +236,6 @@ if __name__ == "__main__":
         model = load_model('data/' + model_name)
         # evaluate model on test data
         evaluate_model(model,**arguments)
-        export = False
-        if export == True:
-            export_model(model,arguments['job_dir'])
+       
+    if export == True:
+        export_model(model,arguments['job_dir'],arguments['model_name'])

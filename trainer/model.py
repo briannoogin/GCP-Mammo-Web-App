@@ -60,6 +60,42 @@ def define_pretrained_InceptionNet_model(num_classes):
     #model.summary()
     return model
 
+# defines an InceptionNet model with reversed channel inputs so that images can be sent to the google model easier 
+# have to first train using pretrained inception model 
+# then load weights from the trained model to this model
+def define_GCP_model(num_classes):
+    input = Input(shape = (1,250,250))
+    concat_input = Concatenate(axis = 1)([input,input,input])
+    inception_net = InceptionV3(input_tensor = concat_input,weights = 'imagenet',classes=num_classes, include_top = False)
+    layers = inception_net.layers
+    # freeze the first 150 pre-trained layers
+    for layer in layers[0:150]:
+        layer.trainable=False
+    dropout = .50
+    #add additional layers 
+    model = inception_net.output
+    model = GlobalAveragePooling2D()(model)
+    model = Dense(100,kernel_regularizer=regularizers.l2(0.1))(model)
+    model = BatchNormalization()(model)
+    model = Activation(activation='relu')(model)
+    model = Dropout(dropout,seed = 7)(model)
+
+    model = Dense(100,kernel_regularizer=regularizers.l2(0.1))(model)
+    model = BatchNormalization()(model)
+    model = Activation(activation='relu')(model)
+    model = Dropout(dropout,seed = 7)(model)
+
+    model = Dense(100,kernel_regularizer=regularizers.l2(0.1))(model)
+    model = BatchNormalization()(model)
+    model = Activation(activation='relu')(model)
+    model = Dropout(dropout, seed = 7)(model)
+
+    preds = Dense(num_classes,activation='softmax')(model)
+    model = Model(inputs = input, outputs = preds)
+    sgd = optimizers.SGD(lr=0.0025, decay=1e-6, momentum=0.9, nesterov=True)
+    model.compile(loss='sparse_categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
+    #model.summary()
+    return model
 # trains model in batches 
 def train_model(model,job_dir,mode,model_name,**args):
     # image data generator for data augmentation for training data
@@ -147,14 +183,14 @@ def evaluate_model(model,mode, **args):
         )
     # flow from irectory
     test_generator = test_datagen.flow_from_directory(
-        'data/test',
+        'data/combined_test',
         target_size=(250,250),
-        color_mode='rgb',
+        color_mode='grayscale',
         class_mode='sparse',
         seed = 7,
         batch_size = 2,
         shuffle = False)
-    num_examples = 378
+    num_examples = 704
     steps = num_examples/test_generator.batch_size
     result = model.evaluate_generator(test_generator,steps=steps)
     print("Test Error",result[0])
@@ -180,7 +216,7 @@ if __name__ == "__main__":
 
     # used to make formatting image in Google Cloud easier 
     K.set_image_data_format('channels_first')
-
+    K.set_image_dim_ordering("th")
     # set rng seed
     np.random.seed(0)
     parser = argparse.ArgumentParser()
@@ -233,9 +269,13 @@ if __name__ == "__main__":
         print("Loading model from Google Cloud")	
         os.system('gsutil -q cp gs://cbis-ddsm-cnn/models/%s data/%s' % (model_name, model_name))
         print("Finished loading model from Google Cloud")	
-        model = load_model('data/' + model_name)
+        model = load_model('data/' + model_name + '.h5')
+        reversed_channel_model = define_GCP_model(3)
+        reversed_channel_model.set_weights(model.get_weights())
         # evaluate model on test data
-        evaluate_model(model,**arguments)
+        evaluate_model(reversed_channel_model,**arguments)
+        # change model to the google one so it can be exported
+        model = reversed_channel_model
        
     if export == True:
         export_model(model,arguments['job_dir'],arguments['model_name'])

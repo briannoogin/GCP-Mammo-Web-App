@@ -6,7 +6,7 @@ PACKAGE_STAGING_PATH="gs://cbis-ddsm-cnn"
 
 now=$(date +"%Y%m%d_%H%M%S")
 JOB_NAME="Brian_Nguyen_$now"
-MODEL_NAME='train_inceptionNet_150freeze_dropout50_100units_00025Lr_1L2reg_67196.h5'
+MODEL_NAME='complete_train_inceptionNet_channelsfirst_concat_613'
 JOB_DIR="gs://cbis-ddsm-cnn"
 REGION="us-central1"
 MODE="LOCAL"

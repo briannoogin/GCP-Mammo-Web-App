@@ -2,8 +2,8 @@
 from googleapiclient import discovery
 from googleapiclient import errors
 import numpy as np
-from skimage.io import imread
 from skimage.transform import resize
+
 def predict_json(project, model, instances, version=None):
     """Send json data to a deployed model for prediction.
 
@@ -40,12 +40,11 @@ def predict_json(project, model, instances, version=None):
 # convert flattened list to a 2d array with given shape
 def convert_2Darray(list,img_width,img_height):
     array = np.asarray(list)
+    # reshape array into rgb and alpha channels 
     array = np.reshape(array,(img_width,img_height,4))
     converted_array = np.zeros(shape = (img_width,img_height))
-    for row in range(len(array)):
-        for col in range(len(array[row])):
-            # weighed average of rgb colors to convert grayscale 
-            converted_array[row][col] = .3 * array[row][col][0] + .59 * array[row][col][1] + .11 * array[row][col][2]
+    # convert rgb to grayscale
+    converted_array[:,:] = .3 * array[:,:,0] + .59 * array[:,:,1] + .11 * array[:,:,2]
     return converted_array
 
 # send request to model hosted on Google ML engine

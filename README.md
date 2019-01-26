@@ -1,4 +1,4 @@
-# CBIS-DDSM-Computer-Vision-Project
+# GCP-Mammo-Web-App
 
 Breast cancer diagnosis using a CNN. Used CBIS-DDSM breast cancer dataset. Model is developed, trained, and hosted with Google Cloud Platform.
 
